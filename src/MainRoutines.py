@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from icmpMonitor import icmpMonitor
+from icmpMonitor import icmpmonitor
 
 
-icmpMonitor()
+icmpmonitor()

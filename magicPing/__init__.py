@@ -22,7 +22,7 @@ Format of ICMP Echo Request:
         Source Address      : 4 bytes
         Destination Address : 4 bytes
     ICMP            : up to 65515
-        type                : 1 byte            ==  0
+        type                : 1 byte            ==  8
         code                : 1 byte            ==  0
         checksum            : 2 bytes           ==  The 16-bit ones's complement
                                                     of the one's complement sum
@@ -33,13 +33,14 @@ Format of ICMP Echo Request:
                                                     determined by identifier
                                                     of sender
             sequence number         : 2 bytes   ==  valid sequence number
-                                                    on init == 0
+                                                    on init == 0, data sending
+                                                    also starts with 0
                                                     (65535 followed by 0)
         Description         : up to 65507 bytes
         on init request:
-            UTF-8 string            : 10 bytes  ==  "magic-ping"
+            ascii string            : 10 bytes  ==  "magic-ping"
             flags                   : 1 byte    ==  0x1 on using cypher
-                                                    0x2, ..., 0x32 - reserved
+                                                    0x2, ..., 0x80 - reserved
             size of message         : 8 bytes
         on init reply:
             error code              : 1 byte    ==  0 on success
@@ -51,8 +52,7 @@ Format of ICMP Echo Request:
         on data sending request:
             data                    : up to 65507 bytes
         on data sending reply:
-            None (client should checking original echo replies from server)
+            checksum                : The 16-bit ones's complement
+                                      of the one's complement sum
+                                      of the received data
 """
-
-# import magicPing.icmp
-# import magicPing.utils

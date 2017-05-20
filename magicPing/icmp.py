@@ -4,11 +4,11 @@
 import logging
 import socket
 import struct
-import threading
 import time
 
-from magicPing import utils
+import errno
 
+from magicPing import utils
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -56,8 +56,7 @@ def monitor():
                      int(src_address[0]), int(src_address[1]),
                      int(src_address[2]), int(src_address[3]),
                      int(dst_address[0]), int(dst_address[1]),
-                     int(dst_address[2]), int(dst_address[3])),
-              end='')
+                     int(dst_address[2]), int(dst_address[3])), end='')
 
         icmp_type, icmp_code, icmp_checksum = \
             struct.unpack('!BBH', icmp_header)
@@ -118,127 +117,49 @@ def send_echo_reply(ip, icmp_id, sequence_num, data):
         sock.send(msg)
 
 
-def receive_echo_request(source_address=None, timeout=0):
+def receive_echo_request(source_address=None, preferred_id=None, preferred_seq_num=None, timeout=0):
     with socket.socket(socket.AF_INET, socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
         if timeout:
-            sock.settimeout(timeout)
-        while True:
+            start = time.time()
+        sock_timeout = timeout
+        while not timeout or sock_timeout > 0:
+            if sock_timeout:
+                sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
-            icmp_type, icmp_code, icmp_id, sequence_num = struct.unpack("!BBHH", msg[20:28])
-            if icmp_type != 8 or icmp_code != 0:
-                continue
-            data = msg[28:]
-            if source_address is None or ip == source_address:
-                return ip, icmp_id, sequence_num, data
+            icmp_type, icmp_code, _, icmp_id, sequence_num\
+                = struct.unpack("!BBHHH", msg[20:28])
+            if not (icmp_type != 8 or icmp_code != 0):
+                data = msg[28:]
+                if (source_address is None or ip == source_address)\
+                        or (preferred_id is None or icmp_id == preferred_id)\
+                        or (preferred_seq_num is None or sequence_num == preferred_seq_num):
+                    return ip, icmp_id, sequence_num, data
+            if timeout != 0:
+                sock_timeout = start - time.time() + timeout
+        raise sock.timeout
 
-def receive_echo_reply(source_address=None, timeout=0):
+
+def receive_echo_reply(source_address=None, preferred_id=None, preferred_seq_num=None, timeout=0):
     with socket.socket(socket.AF_INET, socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
         if timeout:
-            sock.settimeout(timeout)
-        while True:
+            start = time.time()
+        sock_timeout = timeout
+        while not timeout or sock_timeout > 0:
+            if sock_timeout:
+                sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
-            icmp_type, icmp_code, icmp_id, sequence_num = struct.unpack("!BBHH", msg[20:28])
-            if icmp_type != 0 or icmp_code != 0:
-                continue
-            data = msg[28:]
-            if source_address is None or ip == source_address:
-                return ip, icmp_id, sequence_num, data
-
-
-class Server:
-    def __init__(self, max_size=1024**3 * 10, timeout=10):
-        log.info("init server")
-        log.debug(" max_size:%s; timeout:%s",
-                  max_size, timeout)
-        self.max_size = max_size
-        self.timeout = timeout
-        self.exchangers = list()
-        self.runnable = threading.Event()
-        self.runnable.set()
-
-    def receive_magic_init(self):
-        log.info("monitor for magic-ping init messages")
-        while self.runnable.is_set():
-            ip, icmp_id, sequence_num, data = receive_echo_request()
-            log.info("received echo request")
-            log.debug("ip:%s; id:%d; sequence number:%d",
-                      ip, icmp_id, sequence_num)
-            if sequence_num == 0 and data[:10] == bytes("magic-ping", "ascii"):
-                flags, size = struct.unpack("!BH", data[10:19])
-                return ip, icmp_id, flags, size
-
-    @staticmethod
-    def receive_magic_data(ip, icmp_id, sequence_num):
-        received_ip, received_icmp_id, \
-            received_sequence_num, received_data = receive_echo_request()
-        if received_ip == ip and \
-            received_icmp_id == icmp_id and \
-                received_sequence_num == sequence_num:
-            return received_data
-
-    def magic_exchange(self, context):
-        ip, icmp_id, flags, size, _ = context
-        log.info("Receiving file")
-        log.debug("time: %s;ip: %s; id: %d; flags: %s; size: %d.",
-                  time.localtime(), ip, icmp_id, bin(flags), size)
-        with open("{}:{}:{}:{}".
-                  format(ip, icmp_id, flags, size), "w") as file:
-            if size <= self.max_size:
-                if flags & 0x1:
-                    pass    # TODO
-                else:
-                    send_echo_request(ip, icmp_id, 0, b'\x00')
-                    sequence_num = 0
-                    while True:
-                        data = self.receive_magic_data(ip, icmp_id,
-                                                       sequence_num)
-                        if 0 < len(data) < 65507:
-                            file.write(data)
-                        else:
-                            break
-                        while True:
-                            checksum = utils.checksum(data)
-                            send_echo_request(ip, icmp_id, sequence_num, struct.pack("!H", checksum))
-                            data = self.receive_magic_data(ip, icmp_id, sequence_num)
-                            if struct.unpack("!H", data) == checksum:
-                                break
-                        sequence_num = (sequence_num + 1) % 65536
-            else:
-                send_echo_request(ip, icmp_id, 0, b'\x01')
-                return 0x1
-
-    def closer(self):
-        while self.runnable.is_set() or len(self.exchangers) > 0:
-            for exchanger in self.exchangers:
-                exchanger.join(0.01)
-                if not exchanger.is_alive():
-                    self.exchangers.remove(exchanger)
-
-    def run(self):
-        log.info("running server")
-        closer = threading.Thread(target=self.closer)
-        closer.start()
-        while self.runnable.is_set():
-            context = self.receive_magic_init()
-            th = threading.Thread(target=self.magic_exchange, args=context)
-            th.start()
-            self.exchangers.append(th)
-        closer.join()
-
-    def send_magic_data(self, ip, icmp_id, sequence_num):
-        pass
-
-
-class Client:
-    def __init__(self, max_size=1024**3 * 10, timeout=10):
-        log.info("init client")
-        log.debug(" max_size:%s; timeout:%s",
-                  max_size, timeout)
-        self.max_size = max_size
-        self.timeout = timeout
-
-    def send():
+            icmp_type, icmp_code, icmp_id, sequence_num\
+                = struct.unpack("!BBHH", msg[20:28])
+            if not (icmp_type != 0 or icmp_code != 0):
+                data = msg[28:]
+                if (source_address is None or ip == source_address)\
+                        or (preferred_id is None or icmp_id == preferred_id)\
+                        or (preferred_seq_num is None or sequence_num == preferred_seq_num):
+                    return ip, icmp_id, sequence_num, data
+            if timeout != 0:
+                sock_timeout = start - time.time() + timeout
+        raise sock.timeout

@@ -3,7 +3,7 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           A client/server app for data transfer within ping traffic
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-All communication is done through echo requests
+All communications is done through echo requests
 Format of ICMP Echo Request:
     IP header       : 20 bytes
         Version             : 4 bits            ==  4
@@ -30,8 +30,7 @@ Format of ICMP Echo Request:
                                                     starting with the ICMP Type.
         ECHO part of header : 4 bytes
             identifier              : 2 bytes   ==  same for whole exchanging.
-                                                    determined by identifier
-                                                    of sender
+                                                    determined by receiver
             sequence number         : 2 bytes   ==  valid sequence number
                                                     on init == 0, data sending
                                                     also starts with 0
@@ -43,6 +42,7 @@ Format of ICMP Echo Request:
                                                     0x2, ..., 0x80 - reserved
             size of message         : 8 bytes
         on init reply:
+            ascii string            : 10 bytes  == "magic-ping"
             error code              : 1 byte    ==  0 on success
                                                     0x1 if message is too big
         on key exchanging request:
@@ -56,3 +56,6 @@ Format of ICMP Echo Request:
                                       of the one's complement sum
                                       of the received data
 """
+import logging
+
+logging.basicConfig(format="%(levelname)-8s [%(asctime)-15s; %(name)s]: %(message)s", level=logging.DEBUG)

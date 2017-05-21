@@ -1,5 +1,5 @@
 """
-    functions to work with ICMP
+Функции для работы с ICMP ECHO REPLY/REQUEST
 """
 import logging
 import socket
@@ -9,13 +9,12 @@ import time
 from magicPing import utils
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
 
 
 def monitor():
     """
-    Monitoring ICMP messages
-"""
+    Мониторинг ICMP ECHO REPLY/REQUEST пакетов
+    """
     with socket.socket(socket.AF_INET,
                        socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
@@ -80,6 +79,13 @@ def monitor():
 
 
 def send_echo_request(ip, icmp_id, sequence_num, data):
+    """
+    Посылка ICMP ECHO REQUEST
+    :param ip: адресат
+    :param icmp_id: идентификатор
+    :param sequence_num: номер сообщения
+    :param data: данные
+    """
     icmp_type = 8
     icmp_code = 0
     # noinspection SpellCheckingInspection
@@ -98,6 +104,13 @@ def send_echo_request(ip, icmp_id, sequence_num, data):
 
 
 def send_echo_reply(ip, icmp_id, sequence_num, data):
+    """
+    Посылка ICMP ECHO REPLY
+    :param ip: адресат
+    :param icmp_id: идентификатор
+    :param sequence_num: номер сообщения
+    :param data: данные
+    """
     icmp_type = 0
     icmp_code = 0
     # noinspection SpellCheckingInspection
@@ -115,7 +128,20 @@ def send_echo_reply(ip, icmp_id, sequence_num, data):
         sock.send(msg)
 
 
-def receive_echo_request(source_address=None, preferred_id=None, preferred_seq_num=None, timeout=0):
+def receive_echo_request(source_address=None, preferred_id=None,
+                         preferred_seq_num=None, timeout=0,
+                         prefix=None, suffix=None):
+    """
+    Получение ICMP ECHO REQUEST
+    :param source_address: ожидаемый адрес отправителя
+    :param preferred_id: ожидаемый идетификатор отправителя
+    :param preferred_seq_num: ожидаемый номер сообщения
+    :param timeout: время ожидания сообщения
+    :param prefix: ожидаемое начало сообщения
+    :param suffix: ожидаемый конец сообщения
+    :return: кортеж информации о полученном сообщении
+                (ip, icmp id, sequence number, data)
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
         if timeout is not None:
@@ -132,14 +158,33 @@ def receive_echo_request(source_address=None, preferred_id=None, preferred_seq_n
                 data = msg[28:]
                 if (source_address is None or ip == source_address)\
                         or (preferred_id is None or icmp_id == preferred_id)\
-                        or (preferred_seq_num is None or sequence_num == preferred_seq_num):
+                        or (preferred_seq_num is None or sequence_num == preferred_seq_num)\
+                        or (prefix is None
+                            or (len(data) >= len(prefix)
+                                and prefix == data[:len(prefix)]))\
+                        or (prefix is None
+                            or (len(data) >= len(suffix)
+                                and suffix == data[len(data) - len(suffix):])):
                     return ip, icmp_id, sequence_num, data
             if timeout is not None:
                 sock_timeout = start - time.time() + timeout
         raise sock.timeout
 
 
-def receive_echo_reply(source_address=None, preferred_id=None, preferred_seq_num=None, timeout=0):
+def receive_echo_reply(source_address=None, preferred_id=None,
+                       preferred_seq_num=None, timeout=0,
+                       prefix=None, suffix=None):
+    """
+    Получение ICMP ECHO REPLY
+    :param source_address: ожидаемый адрес отправителя
+    :param preferred_id: ожидаемый идетификатор отправителя
+    :param preferred_seq_num: ожидаемый номер сообщения
+    :param timeout: время ожидания сообщения
+    :param prefix: ожидаемое начало сообщения
+    :param suffix: ожидаемый конец сообщения
+    :return: кортеж информации о полученном сообщении
+                (ip, icmp id, sequence number, data)
+    """
     with socket.socket(socket.AF_INET, socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
         if timeout is not None:
@@ -156,7 +201,13 @@ def receive_echo_reply(source_address=None, preferred_id=None, preferred_seq_num
                 data = msg[28:]
                 if (source_address is None or ip == source_address)\
                         or (preferred_id is None or icmp_id == preferred_id)\
-                        or (preferred_seq_num is None or sequence_num == preferred_seq_num):
+                        or (preferred_seq_num is None or sequence_num == preferred_seq_num)\
+                        or (prefix is None
+                            or (len(data) >= len(prefix)
+                                and prefix == data[:len(prefix)]))\
+                        or (prefix is None
+                            or (len(data) >= len(suffix)
+                                and suffix == data[len(data) - len(suffix):])):
                     return ip, icmp_id, sequence_num, data
             if timeout is not None:
                 sock_timeout = start - time.time() + timeout

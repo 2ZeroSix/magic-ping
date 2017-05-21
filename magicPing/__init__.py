@@ -41,18 +41,19 @@
                                                     на каждом шаге
         Description         : <= 65507 bytes
         инициализирующее сообщение:
-            ascii string            : 10 bytes  ==  "magic-ping"
+            ascii string            : 15 bytes  ==  "magic-ping-send"
             flags                   : 1 byte    ==  0x1 чтобы использовать шифрование
             size of message         : 8 bytes
-            filename                : <= 65488  ==  Нуль-терминированная utf-8 строка
+            filename                : <= 65483  ==  Нуль-терминированная utf-8 строка
         ответ на инициализирующее сообщение:
-            ascii string            : 10 bytes  == "magic-ping"
+            ascii string            : 15 bytes  == "magic-ping-recv"
             error code              : 1 byte    ==  0x1 если превышен максимальный размер
                                                         сообщения
+            filename                : <= 65483  ==  Нуль-терминированная utf-8 строка
         обмен ключами шифрования на клиентской стороне:
-            TODO
+            random value            : 8 bytes   >= 0
         обмене ключами шифрования на серверной стороне:
-            TODO
+            random value            : 8 bytes   >= 0
         посылка данных:
             data                    : <= 65507 bytes
         ответ на посылку данных:
@@ -61,6 +62,6 @@
                                       16 байтных слов
                                       полученных данных
 """
-import logging
+# import logging
 
-logging.basicConfig(format="%(levelname)-8s [%(asctime)-15s; %(name)s]: %(message)s", level=logging.DEBUG)
+# logging.basicConfig(format="%(levelname)-8s [%(asctime)-15s; %(name)s]: %(message)s", level=logging.ERROR)

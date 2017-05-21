@@ -11,11 +11,10 @@ from magicPing.icmp import receive_echo_request, send_echo_request
 from magicPing import utils
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
 
 
-class Client():
-    def __init__(self, max_size=1024**3 * 10, timeout=10):
+class Client:
+    def __init__(self, max_size=1024**3 * 10, timeout=10.):
         log.info("Инициализация клиента")
         log.debug("Максимальный размер файла: %s; таймаут: %s",
                   max_size, timeout)
@@ -24,41 +23,49 @@ class Client():
         log.info("Инициализация клиента завершена")
 
     def send_magic_init(self, ip, filename, file_size):
-        log.info("Посылка инициализирующего сообщения")
+        log.debug("Посылка инициализирующего сообщения")
         try:
             bytes_filename = bytes(filename, "UTF-8")
-            send_echo_request(ip, 0, 0, b'magic-ping\x00' + struct.pack("!Q", file_size) + bytes_filename)
             if self.timeout:
                 start = time.time()
             sock_timeout = self.timeout
             while not self.timeout or sock_timeout > 0:
-                _, icmp_id, _, data = receive_echo_request(ip, None, 0, sock_timeout)
-                if len(data) >= 11 and data[:10] == b'magic-ping' and data[11:] == bytes_filename:
-                    return icmp_id, data[10]
+                send_echo_request(ip, 0, 0,
+                                  b'magic-ping-send\x00'
+                                  + struct.pack("!Q", file_size)
+                                  + bytes_filename)
+                _, icmp_id, _, data = receive_echo_request(ip, None, 0, sock_timeout,
+                                                           b'magic-ping-recv')
+                if len(data) > 16 and data[16:] == bytes_filename:
+                    return icmp_id, data[15]
                 elif self.timeout != 0:
                     sock_timeout = start - time.time() + self.timeout
             raise socket.timeout
         finally:
-            log.info("Посылка инициализирующего сообщения завершена")
+            log.debug("Посылка инициализирующего сообщения завершена")
 
     def send_magic_data(self, ip, icmp_id, sequence_num, data):
-        log.info("Посылка куска данных")
+        log.debug("Посылка куска данных")
         try:
             checksum = utils.checksum(data)
             if self.timeout:
                 start = time.time()
             sock_timeout = self.timeout
             while not self.timeout or sock_timeout > 0:
-                send_echo_request(ip, icmp_id, sequence_num, data)
-                _, _, _, data = receive_echo_request(ip, icmp_id, sequence_num,
-                                                     sock_timeout / 2 if sock_timeout else 0.1)
-                if checksum == struct.unpack("!H", data[:2]):
+                try:
+                    send_echo_request(ip, icmp_id, sequence_num, data)
+                    _, _, _, data =\
+                        receive_echo_request(ip, icmp_id, sequence_num,
+                                             sock_timeout / 2 if sock_timeout is not None else 0.1,
+                                             struct.pack("!H", checksum))
                     return
-                elif self.timeout != 0:
+                except socket.timeout:
+                    pass
+                if self.timeout != 0:
                     sock_timeout = start - time.time() + self.timeout
             raise socket.timeout
         finally:
-            log.info("Посылка куска данных завершена")
+            log.debug("Посылка куска данных завершена")
 
     def send(self, filename: str, dest: str):
         log.info("Посылка файла \"%s\"; назначение: %s", filename, dest)
@@ -70,12 +77,13 @@ class Client():
                 log.error("Сервер вернул ошибку: %d", err)
                 return
             seq_num = 0
-            while True:
+            iterations = file_size // 65507 + (1 if file_size % 65507 else 0)
+            for i in range(iterations):
+                utils.print_progress_bar(i, iterations)
                 data = file.read(65507)
-                if len(data) == 0:
-                    break
                 self.send_magic_data(dest, icmp_id, seq_num, bytes(data))
                 seq_num = (seq_num + 1) % 65507
-        except socket.timeout as _:
+            utils.print_progress_bar(iterations, iterations)
+        except socket.timeout:
             log.error("Превышено время ожидания ответа от сервера: ip: %s", dest)
         log.info("Посылка файла завершена")

@@ -1,123 +1,191 @@
+import logging
 import socket
 import struct
 import threading
 import time
+from pathlib import PurePath
 
-import logging
+import datetime
 
 from magicPing import utils
-from magicPing.icmp import receive_echo_request, send_echo_request
+from magicPing.icmp import send_echo_request
+
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
 
 
 class Server:
-    class Context:
-        def __init__(self, ip, icmp_id, flags, size, filename):
+    class Packet(object):
+        def __init__(self, ip, id, seq_num, data):
+            """
+            Информация о пакете
+            :param ip: адрес отправителя
+            :param id: идентификатор отправителя
+            :param seq_num: номер пакета
+            :param data: данные
+            """
             self.ip = ip
-            self.icmp_id = icmp_id
+            self.id = id
+            self.seq_num = seq_num
+            self.data = data
+
+    class Context:
+        def __init__(self, flags, size, filename):
+            """
+            Контекст соединения
+            :param flags: флаги
+            :param size: размер файла
+            :param filename: имя файла
+            """
             self.flags = flags
             self.size = size
+            self.cur_size = 0
             self.filename = filename
+            self.seq_num = 0
+            self.key = 0
+            self.lock = threading.Lock()
+            self.start_time = datetime.datetime.now().isoformat()
 
-    def __init__(self, max_size=1024**3 * 10, timeout=10):
+        def __eq__(self, other):
+            return (self.flags == other.flags
+                    and self.size == other.size
+                    and self.filename == other.filename)
+
+        def __hash__(self):
+            return hash(hash(self.flags) + hash(self.size) + hash(self.filename))
+
+    def __init__(self, max_size=1024**3 * 10):
+        """
+        Сервер получающий файлы с помощью ICMP ECHO REQUEST
+        :param max_size: максимальный размер принимаемого файла
+        """
         log.info("Инициализация сервера")
-        log.debug("Максимальный размер файла: %s; таймаут(сек): %s",
-                  max_size, timeout)
+        log.debug("Максимальный размер файла: %s", max_size)
+        self.tasks = set()
+        self.tasks_lock = threading.Lock()
+        self.contexts = dict()
+        self.contexts_lock = threading.Lock()
         self.max_size = max_size
-        self.timeout = timeout
-        self.exchangers = list()
-        self.exchangers_lock = threading.Lock()
         self.runnable = threading.Event()
         self.runnable.set()
         self.connects = dict()
         self.connects_lock = threading.Lock()
 
-    def receive_magic_init(self):
-        log.info("Ожидание инициализирующего сообщения")
-        while self.runnable.is_set():
-            try:
-                ip, icmp_id, sequence_num, data = receive_echo_request(None, 0, 0, 1)
-                log.info("Получен эхо запрос")
-                log.debug("ip:%s; id:%d; sequence number: %d",
-                          ip, icmp_id, sequence_num)
-                if len(data) >= 19 and data[:10] == b'magic-ping':
-                    log.info("Получено инициализирующее сообщение")
-                    flags, size = struct.unpack("!BQ", data[10:19])
-                    return Server.Context(ip, icmp_id, flags, size, data[19:])
-            except socket.timeout:
-                pass
-
-    def receive_magic_data(self, ip, icmp_id, sequence_num):
-        log.info("Получение куска файла")
-        _, _, _, received_data = receive_echo_request(ip, icmp_id, sequence_num, self.timeout)
-        send_echo_request(ip, icmp_id, sequence_num, struct.pack("!H", utils.checksum(received_data)))
-        return received_data
-
-    def magic_exchange(self, context):
-        ip = context.ip
-        icmp_id = context.icmp_id
-        flags = context.flags
-        log.info("Получение файла")
-        log.debug("ip: %s; id: %d; flags: %s; size: %d.",
-                  ip, icmp_id, bin(flags), context.size)
-        try:
-            if context.size <= self.max_size:
-                if flags & 0x1:
-                    pass    # TODO
-                else:
-                    log.info("Обмен начался")
-                    with self.connects_lock:
-                        self.connects[ip] = icmp_id = self.connects.get(ip, 0) + 1
-                    with open("./" + context.filename, "wb") as file:
-                        send_echo_request(ip, icmp_id, 0, b'magic-ping\x00' + context.filename)
-                        sequence_num = 0
-                        size = 0
-                        while size < context.size:
-                            data = self.receive_magic_data(ip, icmp_id,
-                                                           sequence_num)
-                            size += len(data)
-                            if size > context.size:
-                                log.warning("Превышен размер файла")
-                                break
-                            file.write(data)
-                            sequence_num = (sequence_num + 1) % 65536
-            else:
-                log.warning("Превышен максимальный размер файла")
-                send_echo_request(ip, icmp_id, 0, b'magic-ping\x01' + context.filename)
-                return 0x1
-        except socket.timeout as _:
-            log.warning("Превышено время ожидания клиента: ip: %s; icmp_id: %d", ip, icmp_id)
-        finally:
-            with self.connects_lock:
-                self.connects[ip] = self.connects.get(ip, 0) - 1
-            log.info("Приём завершён: ip: %s; id: %s", ip, icmp_id)
-
-    def closer(self):
-        while self.runnable.is_set():
-            time.sleep(1)
-            with self.exchangers_lock:
-                self.exchangers = [e for e in self.exchangers if e is None and not e.is_alive()]
-
     def run(self):
+        """
+        запуск сервера
+        """
         log.info("Сервер запущен")
-        closer = threading.Thread(target=self.closer)
-        closer.start()
-        local_exchangers = list()
-        while self.runnable.is_set():
-            context = self.receive_magic_init()
-            if context is not None:
-                th = threading.Thread(target=self.magic_exchange, args=[context])
-                th.start()
-                local_exchangers.append(th)
-            if self.exchangers_lock.acquire(False):
-                for elem in local_exchangers:
-                    self.exchangers.append(elem)
-                local_exchangers = list()
-                self.exchangers_lock.release()
-        closer.join()
+        workers = [threading.Thread(target=self.worker) for _ in range(10)]
+        for worker in workers:
+            worker.start()
+        self.listener()
+        for worker in workers:
+            worker.join()
         log.info("Сервер завершил работу")
 
     def stop(self):
+        """
+        остановка сервера
+        """
         self.runnable.clear()
         log.info("Сервер завершает работу")
+
+    def listener(self):
+        """
+        слушатель запросов
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP) as sock:
+            sock.settimeout(1)
+            log.info("Сервер начал прослушивание запросов")
+            while self.runnable.is_set():
+                try:
+                    msg = memoryview(sock.recv(65535))
+                    ip = socket.inet_ntoa(msg[12:16])
+                    icmp_type, icmp_code, _, icmp_id, sequence_num \
+                        = struct.unpack("!BBHHH", msg[20:28])
+                    if icmp_type == 8 and icmp_code == 0:
+                        log.debug("Получен запрос: ip: %s; id: %d; seq_num: %d",
+                                  ip, icmp_id, sequence_num)
+                        data = msg[28:]
+                        with self.tasks_lock:
+                            self.tasks.add(Server.Packet(ip, icmp_id, sequence_num, data))
+                except socket.timeout:
+                    pass
+            log.info("Сервер закончил прослушивание запросов")
+
+    def worker(self):
+        """
+        обработчик пакетов
+        """
+        log.debug("Запущен обработчик пакетов")
+        while self.runnable.is_set():
+            try:
+                with self.tasks_lock:
+                    task = self.tasks.pop()
+            except KeyError:
+                time.sleep(0.1)
+                continue
+            ip = task.ip
+            id = task.id
+            seq_num = task.seq_num
+            data = task.data
+            log.debug("Началась обработка пакета: ip: %s; id: %d; seq_num: %d", ip, id, seq_num)
+            if id == 0 and seq_num == 0 and len(data) > 24 and data[:15] == b'magic-ping-send':
+                log.debug("Инициализирующий пакет: ip: %s; filename:%s", ip, str(data[24:], "UTF-8"))
+                context = Server.Context(*struct.unpack("!BQ", data[15:24]), data[24:])
+                with self.connects_lock:
+                    self.connects[ip] = id = self.connects.get(ip, 0) + 1
+                with self.contexts_lock:
+                    if context in self.contexts:
+                        log.debug("Такое соединение уже установлено %s", context)
+                        continue
+                    self.contexts[ip + str(id)] = context
+                err = 0
+                if context.size > self.max_size:
+                    err = 1
+                send_echo_request(ip, id, 0,
+                                  b'magic-ping-recv' + struct.pack("!B", err) + context.filename)
+                context.filename = PurePath(str(context.filename, "UTF-8")).name
+                log.debug("Инициализирующий пакет обработан: ip: %s; id: %d; seq_num: %d",
+                          ip, id, seq_num)
+                with open("{}:{}:{}:{}"
+                          .format(str(context.start_time), ip, id, context.filename), "ab"):
+                    pass
+            elif len(data) > 16 and data[:15] == b'magic-ping-recv':
+                log.debug("Получе пакет сервера (игнорируется): ip: %s; id: %d; seq_num: %d",
+                          ip, id, seq_num)
+                pass
+            else:
+                with self.contexts_lock:
+                    context = self.contexts.get(ip + str(id))
+                    if context is None or context.seq_num != seq_num:
+                        log.debug("Пакет неопознан: ip: %s; id: %d; seq_num: %d", ip, id, seq_num)
+                        continue
+                    else:
+                        if not context.lock.acquire(False):
+                            continue
+                if context.key is None and context.flags & 0x1:
+                    pass  # TODO
+                log.debug("Приём данных: ip: %s; id: %d; seq_num: %d; filename: %s",
+                          ip, id, seq_num, context.filename)
+                with open("{}:{}:{}:{}"
+                          .format(str(context.start_time), task.ip, task.id, context.filename), "ab") as file:
+                    context.cur_size += len(data)
+                    if context.cur_size > context.size:
+                        log.error("Превышен размер файла")
+                        with self.contexts_lock:
+                            del self.contexts[ip + str(id)]
+                        with self.connects_lock:
+                            self.connects[ip] -= 1
+                    send_echo_request(ip, id, seq_num, struct.pack("!H", utils.checksum(data)))
+                    file.write(data)
+                    if context.cur_size == context.size:
+                        log.info("Завершён приём файла: %s", context.filename)
+                        with self.contexts_lock:
+                            self.connects[ip] -= 1
+                            del self.contexts[ip + str(id)]
+                    context.seq_num = (context.seq_num + 1) % 65536
+                log.debug("Приём пакета завершён: ip: %s; id: %d; seq_num: %d; filename: %s",
+                          ip, id, seq_num, context.filename)
+                context.lock.release()
+        log.debug("Завершён обработчик запросов")

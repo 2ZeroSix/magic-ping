@@ -3,8 +3,8 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           A client/server app for data transfer within ping traffic
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-All communications is done through echo requests
-Format of ICMP Echo Request:
+Все коммуникации происходят с помощью ICMP ECHO REQUEST
+Формат ICMP Echo Request:
     IP header       : 20 bytes
         Version             : 4 bits            ==  4
         IHL                 : 4 bits            ==  5
@@ -15,46 +15,51 @@ Format of ICMP Echo Request:
         Fragment Offset     : 5 bits
         Time to Live        : 1 byte
         Protocol            : 1 byte            ==  1
-        Header Checksum     : 2 bytes           ==  The 16 bit one's complement
-                                                    of the one's complement
-                                                    sum of all 16 bit words
-                                                    in the header.
+        Header Checksum     : 2 bytes           ==  16 битный обратный код
+                                                    дополняющей суммы всех
+                                                    16 байтных слов
+                                                    в заголовке.
         Source Address      : 4 bytes
         Destination Address : 4 bytes
     ICMP            : up to 65515
         type                : 1 byte            ==  8
         code                : 1 byte            ==  0
-        checksum            : 2 bytes           ==  The 16-bit ones's complement
-                                                    of the one's complement sum
-                                                    of the ICMP message
-                                                    starting with the ICMP Type.
+        checksum            : 2 bytes           ==  16 битный обратный код
+                                                    дополняющей суммы всех
+                                                    16 байтных слов
+                                                    начиная с поля type.
         ECHO part of header : 4 bytes
-            identifier              : 2 bytes   ==  same for whole exchanging.
-                                                    determined by receiver
-            sequence number         : 2 bytes   ==  valid sequence number
-                                                    on init == 0, data sending
-                                                    also starts with 0
-                                                    (65535 followed by 0)
-        Description         : up to 65507 bytes
-        on init request:
+            identifier              : 2 bytes   ==  id сессии
+                                                    1. при инициализации
+                                                    на стороне клиента
+                                                    == 0
+                                                    2. сервер определяет
+                                                    значение при инициализации
+            sequence number         : 2 bytes   ==  при инициализации == 0
+                                                    при обмене начиается с нуля
+                                                    и увеличивается на 1
+                                                    на каждом шаге
+        Description         : <= 65507 bytes
+        инициализирующее сообщение:
             ascii string            : 10 bytes  ==  "magic-ping"
-            flags                   : 1 byte    ==  0x1 on using cypher
-                                                    0x2, ..., 0x80 - reserved
+            flags                   : 1 byte    ==  0x1 чтобы использовать шифрование
             size of message         : 8 bytes
-        on init reply:
+            filename                : <= 65488  ==  Нуль-терминированная utf-8 строка
+        ответ на инициализирующее сообщение:
             ascii string            : 10 bytes  == "magic-ping"
-            error code              : 1 byte    ==  0 on success
-                                                    0x1 if message is too big
-        on key exchanging request:
+            error code              : 1 byte    ==  0x1 если превышен максимальный размер
+                                                        сообщения
+        обмен ключами шифрования на клиентской стороне:
             TODO
-        on key exchanging reply:
+        обмене ключами шифрования на серверной стороне:
             TODO
-        on data sending request:
-            data                    : up to 65507 bytes
-        on data sending reply:
-            checksum                : The 16-bit ones's complement
-                                      of the one's complement sum
-                                      of the received data
+        посылка данных:
+            data                    : <= 65507 bytes
+        ответ на посылку данных:
+            checksum                : 16 битный обратный код
+                                      дополняющей суммы всех
+                                      16 байтных слов
+                                      полученных данных
 """
 import logging
 

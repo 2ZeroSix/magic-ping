@@ -6,8 +6,6 @@ import socket
 import struct
 import time
 
-import errno
-
 from magicPing import utils
 
 log = logging.getLogger(__name__)
@@ -18,23 +16,23 @@ def monitor():
     """
     Monitoring ICMP messages
 """
-    sock = socket.socket(socket.AF_INET,
-                         socket.SOCK_RAW,
-                         socket.IPPROTO_ICMP)
-    while True:
-        msg = memoryview(sock.recv(65535))  # 65535 is a max value of total length
-        ip_header = msg[:20]
-        icmp_header = msg[20:24]
-        echo_header = msg[24:28]
-        # noinspection SpellCheckingInspection
-        ver_ihl, type_of_service, total_length, identification, \
-            flags3_fragment_offset13, time_to_live, protocol, \
-            ip_checksum, src_address, dst_address = \
-            struct.unpack('!BBHHHBBH4s4s', ip_header)
-        flags = flags3_fragment_offset13 >> 13
-        fragment_offset = flags3_fragment_offset13 & 0x1FFF
-        # noinspection SpellCheckingInspection
-        print("""
+    with socket.socket(socket.AF_INET,
+                       socket.SOCK_RAW,
+                       socket.IPPROTO_ICMP) as sock:
+        while True:
+            msg = memoryview(sock.recv(65535))  # 65535 is a max value of total length
+            ip_header = msg[:20]
+            icmp_header = msg[20:24]
+            echo_header = msg[24:28]
+            # noinspection SpellCheckingInspection
+            ver_ihl, type_of_service, total_length, identification, \
+                flags3_fragment_offset13, time_to_live, protocol, \
+                ip_checksum, src_address, dst_address = \
+                struct.unpack('!BBHHHBBH4s4s', ip_header)
+            flags = flags3_fragment_offset13 >> 13
+            fragment_offset = flags3_fragment_offset13 & 0x1FFF
+            # noinspection SpellCheckingInspection
+            print("""
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                         IP HEADER                             |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -48,37 +46,37 @@ def monitor():
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |destination           {:3}.{:3}.{:3}.{:3}                          |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+""".
-              format(ver_ihl >> 4, ver_ihl & 0xF,
-                     type_of_service, total_length,
-                     identification, flags,
-                     fragment_offset, time_to_live,
-                     protocol, ip_checksum,
-                     int(src_address[0]), int(src_address[1]),
-                     int(src_address[2]), int(src_address[3]),
-                     int(dst_address[0]), int(dst_address[1]),
-                     int(dst_address[2]), int(dst_address[3])), end='')
+                  format(ver_ihl >> 4, ver_ihl & 0xF,
+                         type_of_service, total_length,
+                         identification, flags,
+                         fragment_offset, time_to_live,
+                         protocol, ip_checksum,
+                         int(src_address[0]), int(src_address[1]),
+                         int(src_address[2]), int(src_address[3]),
+                         int(dst_address[0]), int(dst_address[1]),
+                         int(dst_address[2]), int(dst_address[3])), end='')
 
-        icmp_type, icmp_code, icmp_checksum = \
-            struct.unpack('!BBH', icmp_header)
-        print("""
+            icmp_type, icmp_code, icmp_checksum = \
+                struct.unpack('!BBH', icmp_header)
+            print("""
 |                        ICMP HEADER                            |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |   Type:{:3}    |   Code:{:3}    |      Checksum:{:6}          |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+""".
-              format(icmp_type, icmp_code, icmp_checksum), end='')
-        if (icmp_type == 8 or icmp_type == 0) and icmp_code == 0:
-            identifier, sequence_number = \
-                struct.unpack('!HH', echo_header)
-            print("""
+                  format(icmp_type, icmp_code, icmp_checksum), end='')
+            if (icmp_type == 8 or icmp_type == 0) and icmp_code == 0:
+                identifier, sequence_number = \
+                    struct.unpack('!HH', echo_header)
+                print("""
 |                          ECHO HEADER                          |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |      Identifier:{:6}        |    Sequence Number:{:5}      |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+""".
-                  format(identifier, sequence_number))
-            print('Description:', end=' ')
-            for i in msg[28:]:
-                print(i, end=' ')
-        print()
+                      format(identifier, sequence_number))
+                print('Description:', end=' ')
+                for i in msg[28:]:
+                    print(i, end=' ')
+            print()
 
 
 def send_echo_request(ip, icmp_id, sequence_num, data):
@@ -120,11 +118,11 @@ def send_echo_reply(ip, icmp_id, sequence_num, data):
 def receive_echo_request(source_address=None, preferred_id=None, preferred_seq_num=None, timeout=0):
     with socket.socket(socket.AF_INET, socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
-        if timeout:
+        if timeout is not None:
             start = time.time()
         sock_timeout = timeout
-        while not timeout or sock_timeout > 0:
-            if sock_timeout:
+        while timeout is None or sock_timeout > 0:
+            if sock_timeout is not None:
                 sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
@@ -136,7 +134,7 @@ def receive_echo_request(source_address=None, preferred_id=None, preferred_seq_n
                         or (preferred_id is None or icmp_id == preferred_id)\
                         or (preferred_seq_num is None or sequence_num == preferred_seq_num):
                     return ip, icmp_id, sequence_num, data
-            if timeout != 0:
+            if timeout is not None:
                 sock_timeout = start - time.time() + timeout
         raise sock.timeout
 
@@ -144,11 +142,11 @@ def receive_echo_request(source_address=None, preferred_id=None, preferred_seq_n
 def receive_echo_reply(source_address=None, preferred_id=None, preferred_seq_num=None, timeout=0):
     with socket.socket(socket.AF_INET, socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
-        if timeout:
+        if timeout is not None:
             start = time.time()
         sock_timeout = timeout
-        while not timeout or sock_timeout > 0:
-            if sock_timeout:
+        while timeout is None or sock_timeout > 0:
+            if sock_timeout is not None:
                 sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
@@ -160,6 +158,6 @@ def receive_echo_reply(source_address=None, preferred_id=None, preferred_seq_num
                         or (preferred_id is None or icmp_id == preferred_id)\
                         or (preferred_seq_num is None or sequence_num == preferred_seq_num):
                     return ip, icmp_id, sequence_num, data
-            if timeout != 0:
+            if timeout is not None:
                 sock_timeout = start - time.time() + timeout
         raise sock.timeout

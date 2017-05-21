@@ -1,5 +1,6 @@
 #!/usr/bin/sudo python3
 import argparse
+import threading
 from enum import Enum
 
 from magicPing import server
@@ -12,22 +13,54 @@ class TypeOfApp(Enum):
     SERVER = 1
     CLIENT = 2
 
-if __name__ == "__main__":
+
+def get_parser():
     parser = argparse.ArgumentParser(
-        description="send/receive messages through ECHO REQUEST")
-    fullGroup = parser.add_mutually_exclusive_group()
-    fullGroup.add_argument("--server", "-s", action="store_const",
-                           const=TypeOfApp.SERVER, dest="type", help="run server")
-    fullGroup.add_argument("--client", "-c", action="store_const",
-                           const=TypeOfApp.CLIENT, dest="type", help="run client")
-    fullGroup.add_argument("--monitor", "-m", action="store_const",
-                           const=TypeOfApp.MONITOR, dest="type", help="run monitor")
-    mtype = parser.parse_args().type
-    if mtype == TypeOfApp.SERVER:
-        server.Server(timeout=0).run()
-    elif mtype == TypeOfApp.CLIENT:
-        client.Client(timeout=0).send(input("Имя файла для отправки: "), input("Адресат: "))
-    elif mtype == TypeOfApp.MONITOR:
+        description="Приложение для посылки/приёма сообщений с помощью ECHO REQUEST")
+    parser.set_defaults(type=None)
+    subparsers = parser.add_subparsers()
+
+    server_parser = subparsers.add_parser("server", aliases=["s"],
+                                          help="запуск сервера")
+    server_parser.set_defaults(type=TypeOfApp.SERVER)
+    server_parser.add_argument("--max_size", "-m", type=int, default=1024 ** 3 * 10,
+                               help="Максимальный размер файла")
+    server_parser.add_argument("--timeout", "-t", type=float, default=10.,
+                               help="время ожидания ответа")
+
+    client_parser = subparsers.add_parser("client", aliases=["c"],
+                                          help="запуск клиента")
+    client_parser.set_defaults(type=TypeOfApp.CLIENT)
+    client_parser.add_argument("--max_size", "-m", type=int, default=1024 ** 3 * 10)
+    client_parser.add_argument("--timeout", "-t", type=float, default=10.)
+    client_parser.add_argument("--filename", "-f", default=None)
+    client_parser.add_argument("--destination", "-d", default=None)
+
+    monitor_parser = subparsers.add_parser("monitor", aliases=["m"],
+                                           help="запуск мониторинга " +
+                                                "ping echo request/reply")
+    monitor_parser.set_defaults(type=TypeOfApp.MONITOR)
+
+    return parser
+
+
+if __name__ == "__main__":
+    parser = get_parser()
+    args = parser.parse_args()
+    if args.type == TypeOfApp.SERVER:
+        server = server.Server(max_size=args.max_size, timeout=args.timeout)
+        server_thread = threading.Thread(target=server.run)
+        server_thread.start()
+        server_thread.ident
+        while input() != "q":
+            pass
+        else:
+            server.stop()
+    elif args.type == TypeOfApp.CLIENT:
+        client = client.Client(max_size=args.max_size, timeout=args.timeout)
+        client.send(args.filename if args.filename is not None else input("Имя файла для отправки: "),
+                    args.destination if args.destination is not None else input("Адресат: "))
+    elif args.type == TypeOfApp.MONITOR:
         monitor()
     else:
         parser.print_help()

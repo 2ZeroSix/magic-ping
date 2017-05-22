@@ -61,6 +61,7 @@ class Server:
         log.info("Инициализация сервера")
         log.debug("Максимальный размер файла: %s", max_size)
         self.tasks = set()
+        self.tasks_count = threading.Semaphore(0)
         self.tasks_lock = threading.Lock()
         self.contexts = dict()
         self.contexts_lock = threading.Lock()
@@ -75,10 +76,12 @@ class Server:
         запуск сервера
         """
         log.info("Сервер запущен")
-        workers = [threading.Thread(target=self.worker) for _ in range(10)]
+        workers = [threading.Thread(target=self.worker) for _ in range(5)]
         for worker in workers:
             worker.start()
         self.listener()
+        for _ in workers:
+            self.tasks_count.release()
         for worker in workers:
             worker.join()
         log.info("Сервер завершил работу")
@@ -109,6 +112,7 @@ class Server:
                         data = msg[28:]
                         with self.tasks_lock:
                             self.tasks.add(Server.Packet(ip, icmp_id, sequence_num, data))
+                        self.tasks_count.release()
                 except socket.timeout:
                     pass
             log.info("Сервер закончил прослушивание запросов")
@@ -118,13 +122,9 @@ class Server:
         обработчик пакетов
         """
         log.debug("Запущен обработчик пакетов")
-        while self.runnable.is_set():
-            try:
-                with self.tasks_lock:
-                    task = self.tasks.pop()
-            except KeyError:
-                time.sleep(0.1)
-                continue
+        while self.tasks_count.acquire() and self.runnable.is_set():
+            with self.tasks_lock:
+                task = self.tasks.pop()
             ip = task.ip
             id = task.id
             seq_num = task.seq_num
@@ -149,7 +149,7 @@ class Server:
                 log.debug("Инициализирующий пакет обработан: ip: %s; id: %d; seq_num: %d",
                           ip, id, seq_num)
                 with open("{}:{}:{}:{}"
-                          .format(str(context.start_time), ip, id, context.filename), "ab"):
+                          .format(context.start_time, ip, id, context.filename), "ab"):
                     pass
             elif len(data) > 16 and data[:15] == b'magic-ping-recv':
                 log.debug("Получе пакет сервера (игнорируется): ip: %s; id: %d; seq_num: %d",
@@ -169,7 +169,7 @@ class Server:
                 log.debug("Приём данных: ip: %s; id: %d; seq_num: %d; filename: %s",
                           ip, id, seq_num, context.filename)
                 with open("{}:{}:{}:{}"
-                          .format(str(context.start_time), task.ip, task.id, context.filename), "ab") as file:
+                          .format(context.start_time, task.ip, task.id, context.filename), "ab") as file:
                     context.cur_size += len(data)
                     if context.cur_size > context.size:
                         log.error("Превышен размер файла")

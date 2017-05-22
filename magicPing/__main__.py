@@ -26,7 +26,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Приложение для посылки/приёма сообщений с помощью ECHO REQUEST")
     parser.set_defaults(type=None)
-    parser.add_argument("--log_file", "-l", dest="log_file", type=open, default=sys.stdout)
+    parser.add_argument("--log_file", "-l", dest="log_file", type=open, default=sys.stderr)
 
     log_level = parser.add_mutually_exclusive_group()
     log_level.set_defaults(log_level=logging.ERROR)
@@ -70,7 +70,7 @@ if __name__ == "__main__":
         server = server.Server(max_size=args.max_size)
         server_thread = threading.Thread(target=server.run)
         server_thread.start()
-        while input("введите \"q\", чтобы завершить работу сервера: ") != "q":
+        while input("введите \"q\", чтобы завершить работу сервера\n") != "q":
             pass
         else:
             server.stop()

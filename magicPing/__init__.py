@@ -51,8 +51,10 @@
                                                         сообщения
             filename                : <= 65483  ==  Нуль-терминированная utf-8 строка
         обмен ключами шифрования на клиентской стороне:
+            ascii string            : 15 bytes  == "magic-ping-skey"
             random value            : 8 bytes   >= 0
         обмене ключами шифрования на серверной стороне:
+            ascii string            : 15 bytes  == "magic-ping-rkey"
             random value            : 8 bytes   >= 0
         посылка данных:
             data                    : <= 65507 bytes

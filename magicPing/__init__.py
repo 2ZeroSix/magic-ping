@@ -41,12 +41,12 @@
                                                     на каждом шаге
         Description         : <= 65507 bytes
         инициализирующее сообщение:
-            ascii string            : 15 bytes  ==  "magic-ping-send"
+            ascii string            : 15 bytes  ==  "magic-ping-sini"
             flags                   : 1 byte    ==  0x1 чтобы использовать шифрование
             size of message         : 8 bytes
             filename                : <= 65483  ==  Нуль-терминированная utf-8 строка
         ответ на инициализирующее сообщение:
-            ascii string            : 15 bytes  == "magic-ping-recv"
+            ascii string            : 15 bytes  == "magic-ping-rini"
             error code              : 1 byte    ==  0x1 если превышен максимальный размер
                                                         сообщения
             filename                : <= 65483  ==  Нуль-терминированная utf-8 строка
@@ -57,13 +57,16 @@
             ascii string            : 15 bytes  == "magic-ping-rkey"
             random value            : 8 bytes   >= 0
         посылка данных:
-            data                    : <= 65507 bytes
+            ascii string            : 15 bytes  == "magic-ping-send"
+            data                    : <= 65492 bytes
         ответ на посылку данных:
-            checksum                : 16 битный обратный код
-                                      дополняющей суммы всех
-                                      16 байтных слов
-                                      полученных данных
+            ascii string            : 15 bytes  == "magic-ping-recv"
+            last_byte               : последний байт переданных данных
 """
+import magicPing.client
+import magicPing.server
+import magicPing.icmp
+import magicPing.utils
 # import logging
 
 # logging.basicConfig(format="%(levelname)-8s [%(asctime)-15s; %(name)s]: %(message)s", level=logging.ERROR)

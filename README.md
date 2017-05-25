@@ -1,2 +1,2 @@
 # magic-ping
-A client/server app for data transfer within ping traffic
+Приложение для посылки сообщений с помощью ICMP ECHO REQUEST

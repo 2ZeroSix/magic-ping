@@ -15,8 +15,8 @@ def carry_around_add(a, b):
 def checksum(msg, avoid_range=range(0)):
     """
     обратный код 16 битной дополняющей суммы елементов msg
-    :param msg:
-    :param avoid_range:
+    :param msg: сообщения для подсчёта контрольной суммы
+    :param avoid_range: диапазон индексов елементов, которые не должны учавствовать в подсчёте
     :return:
     """
     s = 0
@@ -39,14 +39,14 @@ def checksum(msg, avoid_range=range(0)):
 def print_progress_bar(iteration: int, total: int, prefix: str = '', suffix: str = '',
                        decimals: int = 1, length: int = None, fill: str = '█') -> None:
     """
-        Call in a loop to create terminal progress bar
-        :param iteration: current iteration
-        :param total: total iterations
-        :param prefix: prefix string
-        :param suffix: suffix string
-        :param decimals: positive number of decimals in percent complete
-        :param length: character length of bar
-        :param fill: bar fill character
+        вывод строки состояния для работы в цикле
+        :param iteration: текущая итерация
+        :param total: общее число итераций
+        :param prefix: префикс
+        :param suffix: суффикс
+        :param decimals: кол-во знаков после запятой
+        :param length: длина строки состояния
+        :param fill: заполняющий символ
     """
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     if length is None:

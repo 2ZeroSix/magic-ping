@@ -78,9 +78,10 @@ def monitor():
             print()
 
 
-def send_echo_request(ip, icmp_id, sequence_num, data):
+def send_echo_request(sock, ip, icmp_id, sequence_num, data):
     """
     Посылка ICMP ECHO REQUEST
+    :param sock: сокет для отправки сообщения
     :param ip: адресат
     :param icmp_id: идентификатор
     :param sequence_num: номер сообщения
@@ -97,15 +98,13 @@ def send_echo_request(ip, icmp_id, sequence_num, data):
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               checksum, icmp_id, sequence_num)
     msg = icmp_header + data
-    with socket.socket(socket.AF_INET, socket.SOCK_RAW,
-                       socket.IPPROTO_ICMP) as sock:
-        sock.connect((ip, 0))
-        sock.send(msg)
+    sock.sendto(msg, (ip, 0))
 
 
-def send_echo_reply(ip, icmp_id, sequence_num, data):
+def send_echo_reply(sock, ip, icmp_id, sequence_num, data):
     """
     Посылка ICMP ECHO REPLY
+    :param sock: сокет для отправки сообщения
     :param ip: адресат
     :param icmp_id: идентификатор
     :param sequence_num: номер сообщения
@@ -122,93 +121,96 @@ def send_echo_reply(ip, icmp_id, sequence_num, data):
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               checksum, icmp_id, sequence_num)
     msg = icmp_header + data
-    with socket.socket(socket.AF_INET, socket.SOCK_RAW,
-                       socket.IPPROTO_ICMP) as sock:
-        sock.connect((ip, 0))
-        sock.send(msg)
+    sock.sendto(msg, (ip, 0))
 
 
-def receive_echo_request(source_address=None, preferred_id=None,
-                         preferred_seq_num=None, timeout=0,
+def receive_echo_request(sock, source_address=None, pref_id=None,
+                         pref_seq_num=None, timeout=0,
                          prefix=None, suffix=None):
     """
     Получение ICMP ECHO REQUEST
+    :param sock: сокет для приёма сообщения
     :param source_address: ожидаемый адрес отправителя
-    :param preferred_id: ожидаемый идетификатор отправителя
-    :param preferred_seq_num: ожидаемый номер сообщения
+    :param pref_id: ожидаемый идетификатор отправителя
+    :param pref_seq_num: ожидаемый номер сообщения
     :param timeout: время ожидания сообщения
     :param prefix: ожидаемое начало сообщения
     :param suffix: ожидаемый конец сообщения
     :return: кортеж информации о полученном сообщении
                 (ip, icmp id, sequence number, data)
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_RAW,
-                       socket.IPPROTO_ICMP) as sock:
-        if timeout is not None:
-            start = time.time()
-        sock_timeout = timeout
-        while timeout is None or sock_timeout > 0:
+    if timeout is not None:
+        start = time.time()
+    sock_timeout = timeout
+    while timeout is None or sock_timeout > 0:
+        try:
             if sock_timeout is not None:
                 sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
-            icmp_type, icmp_code, _, icmp_id, sequence_num\
+            icmp_type, icmp_code, _, icmp_id, seq_num\
                 = struct.unpack("!BBHHH", msg[20:28])
-            if not (icmp_type != 8 or icmp_code != 0):
+            if icmp_type == 8 or icmp_code == 0:
                 data = msg[28:]
-                if (source_address is None or ip == source_address)\
-                        or (preferred_id is None or icmp_id == preferred_id)\
-                        or (preferred_seq_num is None or sequence_num == preferred_seq_num)\
-                        or (prefix is None
-                            or (len(data) >= len(prefix)
-                                and prefix == data[:len(prefix)]))\
-                        or (prefix is None
-                            or (len(data) >= len(suffix)
-                                and suffix == data[len(data) - len(suffix):])):
-                    return ip, icmp_id, sequence_num, data
-            if timeout is not None:
-                sock_timeout = start - time.time() + timeout
-        raise sock.timeout
+                print(ip == source_address)
+                print(icmp_id == pref_id)
+                print(seq_num == pref_seq_num)
+                print(prefix == data[:len(prefix)])
+                print(suffix == data[len(data) - len(suffix):])
+                if ((source_address is None or ip == source_address)
+                    and (pref_id is None or icmp_id == pref_id)
+                    and (pref_seq_num is None or seq_num == pref_seq_num)
+                    and (prefix is None or (len(data) >= len(prefix)
+                                            and prefix == data[:len(prefix)]))
+                    and (suffix is None or (len(data) >= len(suffix)
+                                            and suffix == data[len(data) - len(suffix):]))):
+                    return ip, icmp_id, seq_num, data
+        except socket.timeout as _:
+            pass
+        if timeout is not None:
+            sock_timeout = start - time.time() + timeout
+    raise socket.timeout
 
 
-def receive_echo_reply(source_address=None, preferred_id=None,
-                       preferred_seq_num=None, timeout=0,
+def receive_echo_reply(sock, source_address=None, pref_id=None,
+                       pref_seq_num=None, timeout=0,
                        prefix=None, suffix=None):
     """
     Получение ICMP ECHO REPLY
+    :param sock: сокет для приёма сообщения
     :param source_address: ожидаемый адрес отправителя
-    :param preferred_id: ожидаемый идетификатор отправителя
-    :param preferred_seq_num: ожидаемый номер сообщения
+    :param pref_id: ожидаемый идетификатор отправителя
+    :param pref_seq_num: ожидаемый номер сообщения
     :param timeout: время ожидания сообщения
     :param prefix: ожидаемое начало сообщения
     :param suffix: ожидаемый конец сообщения
     :return: кортеж информации о полученном сообщении
                 (ip, icmp id, sequence number, data)
     """
-    with socket.socket(socket.AF_INET, socket.SOCK_RAW,
-                       socket.IPPROTO_ICMP) as sock:
-        if timeout is not None:
-            start = time.time()
-        sock_timeout = timeout
-        while timeout is None or sock_timeout > 0:
+    if timeout is not None:
+        start = time.time()
+    sock_timeout = timeout
+    while timeout is None or sock_timeout > 0:
+        try:
             if sock_timeout is not None:
                 sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
-            icmp_type, icmp_code, icmp_id, sequence_num\
+            icmp_type, icmp_code, icmp_id, seq_num\
                 = struct.unpack("!BBHH", msg[20:28])
-            if not (icmp_type != 0 or icmp_code != 0):
+            if icmp_type == 0 and icmp_code == 0:
                 data = msg[28:]
-                if (source_address is None or ip == source_address)\
-                        or (preferred_id is None or icmp_id == preferred_id)\
-                        or (preferred_seq_num is None or sequence_num == preferred_seq_num)\
-                        or (prefix is None
-                            or (len(data) >= len(prefix)
-                                and prefix == data[:len(prefix)]))\
-                        or (prefix is None
-                            or (len(data) >= len(suffix)
-                                and suffix == data[len(data) - len(suffix):])):
-                    return ip, icmp_id, sequence_num, data
-            if timeout is not None:
-                sock_timeout = start - time.time() + timeout
-        raise sock.timeout
+                if ((source_address is None or ip == source_address)
+                    and (pref_id is None or icmp_id == pref_id)
+                    and (pref_seq_num is None or seq_num == pref_seq_num)
+                    and (prefix is None or (len(data) >= len(prefix)
+                                            and prefix == data[:len(prefix)]))
+                    and (suffix is None or (len(data) >= len(suffix)
+                                            and suffix == data[len(data) - len(suffix):]))):
+                    return ip, icmp_id, seq_num, data
+        except socket.timeout as _:
+            pass
+        if timeout is not None:
+            sock_timeout = start - time.time() + timeout
+
+    raise socket.timeout

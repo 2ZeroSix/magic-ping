@@ -54,6 +54,7 @@ def get_parser() -> argparse.ArgumentParser:
     client_parser.add_argument("--unlimited", "-u", action="store_const", const=None, dest="timeout")
     client_parser.add_argument("--filename", "-f", default=None)
     client_parser.add_argument("--destination", "-d", default=None)
+    client_parser.add_argument("--cypher", "-c", action="store_const", const=True, default=False)
     # client_parser.set_defaults(log_level=logging.ERROR)
 
     monitor_parser = subparsers.add_parser("monitor", aliases=["m"],
@@ -69,10 +70,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     logging.basicConfig(format="%(levelname)-8s [%(asctime)-15s; %(name)s]: %(message)s",
                         level=args.log_level, stream=args.log_file)
+
     if args.type == TypeOfApp.SERVER:
         server = server.Server(max_size=args.max_size, thread_num=args.thread_number)
         server_thread = threading.Thread(target=server.run)
         server_thread.start()
+
         while input("введите \"q\", чтобы завершить работу сервера\n") != "q":
             pass
         else:
@@ -80,9 +83,10 @@ if __name__ == "__main__":
             server_thread.join()
 
     elif args.type == TypeOfApp.CLIENT:
-        client = client.Client(max_size=args.max_size, timeout=args.timeout)
+        client = client.Client(max_size=args.max_size, timeout=args.timeout, enable_cypher=args.cypher)
         client.send(args.filename if args.filename is not None else input("Имя файла для отправки: "),
                     args.destination if args.destination is not None else input("Адресат: "))
+
     elif args.type == TypeOfApp.MONITOR:
         monitor()
 

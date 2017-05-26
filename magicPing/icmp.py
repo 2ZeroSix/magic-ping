@@ -5,7 +5,6 @@ import logging
 import socket
 import struct
 import time
-from magicPing import utils
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +17,7 @@ def monitor():
                        socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
         while True:
-            msg = memoryview(sock.recv(65535))  # 65535 is a max value of total length
+            msg = sock.recv(65535)  # 65535 is a max value of total length
             ip_header = msg[:20]
             icmp_header = msg[20:24]
             echo_header = msg[24:28]
@@ -71,10 +70,7 @@ def monitor():
 |      Identifier:{:6}        |    Sequence Number:{:5}      |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+""".
                       format(identifier, sequence_number))
-                print('Description:', end=' ')
-                for i in msg[28:]:
-                    print(i, end=' ')
-            print()
+                print('Description length: ', len(msg[28:]))
 
 
 def send_echo_request(sock, ip, icmp_id, sequence_num, data):
@@ -91,12 +87,6 @@ def send_echo_request(sock, ip, icmp_id, sequence_num, data):
     # noinspection SpellCheckingInspection
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               0, icmp_id, sequence_num)
-    # checksum = utils.carry_around_add(utils.checksum(icmp_header),
-    #                                   utils.checksum(data))
-    # checksum = 0
-    # noinspection SpellCheckingInspection
-    # icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
-    #                           checksum, icmp_id, sequence_num)
     msg = icmp_header + data
     sock.sendto(msg, (ip, 0))
 
@@ -144,7 +134,7 @@ def receive_echo_request(sock, source_address=None, pref_id=None,
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
             icmp_type, icmp_code, checksum, icmp_id, seq_num\
-                = struct.unpack("!BBHHH", msg[20:28])
+                = struct.unpack("!BBHHH", msg[20:28].tobytes())
             if icmp_type == 8 or icmp_code == 0:
                 data = msg[28:]
                 if ((source_address is None
@@ -188,7 +178,7 @@ def receive_echo_reply(sock, source_address=None, pref_id=None,
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
             icmp_type, icmp_code, icmp_id, seq_num\
-                = struct.unpack("!BBHH", msg[20:28])
+                = struct.unpack("!BBHH", msg[20:28].tobytes())
             if icmp_type == 0 and icmp_code == 0:
                 data = msg[28:]
                 if ((source_address is None or ip == source_address)

@@ -1,7 +1,7 @@
 """
                                    magic-ping
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-          A client/server app for data transfer within ping traffic
+          Приложение для посылки сообщений с помощью ICMP ECHO REQUEST
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Все коммуникации происходят с помощью ICMP ECHO REQUEST
 Формат ICMP Echo Request:
@@ -67,6 +67,3 @@ import magicPing.client
 import magicPing.server
 import magicPing.icmp
 import magicPing.utils
-# import logging
-
-# logging.basicConfig(format="%(levelname)-8s [%(asctime)-15s; %(name)s]: %(message)s", level=logging.ERROR)

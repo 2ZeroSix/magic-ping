@@ -5,7 +5,6 @@ import logging
 import socket
 import struct
 import time
-
 from magicPing import utils
 
 log = logging.getLogger(__name__)
@@ -92,11 +91,12 @@ def send_echo_request(sock, ip, icmp_id, sequence_num, data):
     # noinspection SpellCheckingInspection
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               0, icmp_id, sequence_num)
-    checksum = utils.carry_around_add(utils.checksum(icmp_header),
-                                      utils.checksum(data))
+    # checksum = utils.carry_around_add(utils.checksum(icmp_header),
+    #                                   utils.checksum(data))
+    # checksum = 0
     # noinspection SpellCheckingInspection
-    icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
-                              checksum, icmp_id, sequence_num)
+    # icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
+    #                           checksum, icmp_id, sequence_num)
     msg = icmp_header + data
     sock.sendto(msg, (ip, 0))
 
@@ -115,11 +115,6 @@ def send_echo_reply(sock, ip, icmp_id, sequence_num, data):
     # noinspection SpellCheckingInspection
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               0, icmp_id, sequence_num)
-    checksum = utils.carry_around_add(utils.checksum(icmp_header),
-                                      utils.checksum(data))
-    # noinspection SpellCheckingInspection
-    icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
-                              checksum, icmp_id, sequence_num)
     msg = icmp_header + data
     sock.sendto(msg, (ip, 0))
 
@@ -148,16 +143,12 @@ def receive_echo_request(sock, source_address=None, pref_id=None,
                 sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
-            icmp_type, icmp_code, _, icmp_id, seq_num\
+            icmp_type, icmp_code, checksum, icmp_id, seq_num\
                 = struct.unpack("!BBHHH", msg[20:28])
             if icmp_type == 8 or icmp_code == 0:
                 data = msg[28:]
-                print(ip == source_address)
-                print(icmp_id == pref_id)
-                print(seq_num == pref_seq_num)
-                print(prefix == data[:len(prefix)])
-                print(suffix == data[len(data) - len(suffix):])
-                if ((source_address is None or ip == source_address)
+                if ((source_address is None
+                     or socket.inet_aton(ip) == socket.inet_aton(socket.gethostbyname(source_address)))
                     and (pref_id is None or icmp_id == pref_id)
                     and (pref_seq_num is None or seq_num == pref_seq_num)
                     and (prefix is None or (len(data) >= len(prefix)

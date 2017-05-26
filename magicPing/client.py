@@ -7,6 +7,7 @@ import threading
 
 import time
 
+from diffiehellman import diffiehellman
 from pathlib import PurePath
 
 from magicPing.icmp import receive_echo_request, send_echo_request
@@ -36,7 +37,7 @@ class Client:
             if self.timeout is not None:
                 start = time.time()
             sock_timeout = self.timeout
-            while self.timeout is not None or sock_timeout > 0:
+            while self.timeout is None or sock_timeout > 0:
                 try:
                     send_echo_request(self.sock, ip, 0, 0,
                                       b'magic-ping-sini\x00' +
@@ -66,14 +67,14 @@ class Client:
             if self.timeout is not None:
                 start = time.time()
             sock_timeout = self.timeout
-            while self.timeout is not None or sock_timeout > 0:
+            checksum = struct.pack("!H", utils.checksum(data))
+            while self.timeout is None or sock_timeout > 0:
                 try:
                     send_echo_request(self.sock, ip, icmp_id, sequence_num, b'magic-ping-send' + data)
                     _, _, _, data = \
                         receive_echo_request(self.sock, ip, icmp_id, sequence_num,
                                              sock_timeout / 2 if sock_timeout is not None else 1,
-                                             b'magic-ping-recv' + data[-2:-1])
-                    print("{} {}".format(*struct.unpack("!15sB", data[:16])))
+                                             b'magic-ping-recv' + data[-1:])
                     return
                 except socket.timeout:
                     pass
@@ -103,8 +104,8 @@ class Client:
                 for i in range(total_iterations):
                     utils.print_progress_bar(i, total_iterations)
                     data = file.read(65492)
-                    self.send_magic_data(dest, icmp_id, seq_num, bytes(data))
-                    seq_num = (seq_num + 1) % 65535
+                    self.send_magic_data(dest, icmp_id, seq_num, data)
+                    seq_num = (seq_num + 1) % 65536
                 else:
                     utils.print_progress_bar(total_iterations, total_iterations)
             except socket.timeout:

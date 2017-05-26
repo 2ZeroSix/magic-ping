@@ -4,7 +4,7 @@ import socket
 import struct
 import threading
 from pathlib import PurePath
-
+from diffiehellman import diffiehellman
 from magicPing.icmp import send_echo_request
 
 log = logging.getLogger(__name__)
@@ -26,13 +26,15 @@ class Server:
             self.data = data
 
     class Context:
-        def __init__(self, flags, size, filename):
+        def __init__(self, ip, id, flags, size, filename):
             """
             Контекст соединения
             :param flags: флаги
             :param size: размер файла
             :param filename: имя файла
             """
+            self.ip = ip
+            self.id = id
             self.flags = flags
             self.size = size
             self.cur_size = 0
@@ -41,14 +43,15 @@ class Server:
             self.key = 0
             self.lock = threading.Lock()
             self.start_time = datetime.datetime.now().isoformat()
+            self.file = None
 
         def __eq__(self, other):
-            return (self.flags == other.flags
+            return (self.ip == other.ip
                     and self.size == other.size
                     and self.filename == other.filename)
 
         def __hash__(self):
-            return hash(hash(self.flags) + hash(self.size) + hash(self.filename))
+            return hash(hash(self.ip) + hash(self.size) + hash(self.filename))
 
     def __init__(self, max_size=1024**3 * 10, thread_num=2):
         """
@@ -114,7 +117,7 @@ class Server:
                     log.debug("Получен запрос: ip: %s; id: %d; seq_num: %d",
                               ip, icmp_id, sequence_num)
                     data = msg[28:]
-                    if data[:10] == b'magic-ping':
+                    if data[:12] == b'magic-ping-s':
                         with self.tasks_lock:
                             self.tasks.add(Server.Packet(ip, icmp_id, sequence_num, data))
                         self.tasks_count.release()
@@ -128,75 +131,80 @@ class Server:
         """
         log.debug("Запущен обработчик пакетов")
         while self.tasks_count.acquire() and self.runnable.is_set():
-            with self.tasks_lock:
-                task = self.tasks.pop()
-            ip = task.ip
-            id = task.id
-            seq_num = task.seq_num
-            data = task.data
-            log.debug("Началась обработка пакета: ip: %s; id: %d; seq_num: %d", ip, id, seq_num)
-            if id == 0 and seq_num == 0 and len(data) > 24 and data[:15] == b'magic-ping-sini':
-                log.debug("Принят инициализирующий пакет: ip: %s; id: %s, filename:%s",
-                          ip, id, str(data[24:], "UTF-8"))
-                context = Server.Context(*struct.unpack("!BQ", data[15:24]), data[24:])
-                with self.connects_lock:
-                    self.connects[ip] = id = self.connects.get(ip, 0) + 1
-                with self.contexts_lock:
-                    if context in self.contexts.values():
-                        log.info("Такое соединение уже установлено %s", context)
+            try:
+                with self.tasks_lock:
+                    task = self.tasks.pop()
+                ip = task.ip
+                id = task.id
+                seq_num = task.seq_num
+                data = task.data
+                log.debug("Началась обработка пакета: ip: %s; id: %d; seq_num: %d", ip, id, seq_num)
+                if id == 0 and seq_num == 0 and len(data) > 24 and data[:15] == b'magic-ping-sini':
+                    bytes_filename = data[24:]
+                    filename = PurePath(str(bytes_filename, "UTF-8")).name
+                    log.debug("Принят инициализирующий пакет: ip: %s; id: %s, filename:%s",
+                              ip, id, filename)
+                    context = Server.Context(ip, id, *struct.unpack("!BQ", data[15:24]), filename)
+                    with self.connects_lock:
+                        self.connects[ip] = id = self.connects.get(ip, 0) + 1
+                    err = 0
+                    if context.size > self.max_size:
+                        log.info("Превышен максимальный размер файла")
+                        err = 1
                         continue
-                    self.contexts[ip + str(id)] = context
-                err = 0
-                if context.size > self.max_size:
-                    err = 1
-                send_echo_request(self.sock, ip, id, 0, b'magic-ping-rini'
-                                  + struct.pack("!B", err) + context.filename)
-                context.filename = PurePath(str(context.filename, "UTF-8")).name
-                log.info("Начат приём файла: ip: %s; id: %d; filename: %s",
-                         ip, id, context.filename)
-                with open("{}:{}:{}:{}"
-                          .format(context.start_time, ip, id, context.filename), "wb"):
-                    pass
-            elif len(data) > 16 and data[:15] == b'magic-ping-recv':
-                log.debug("Получен пакет сервера (игнорируется): ip: %s; id: %d; seq_num: %d",
-                          ip, id, seq_num)
-                pass
-            elif len(data) > 16 and data[:15] == b'magic-ping-send':
-                with self.contexts_lock:
-                    context = self.contexts.get(ip + str(id))
-                    if context is None or context.seq_num < seq_num:
-                        log.debug("Пакет неопознан: ip: %s; id: %d; seq_num: %d",
-                                  ip, id, seq_num)
-                        continue
-                    elif context.seq_num > seq_num:
-                        send_echo_request(self.sock, ip, id, seq_num, b'magic-ping-recv'+data[-2:-1])
-                        continue
-                    else:
-                        if not context.lock.acquire(False):
+                    with self.contexts_lock:
+                        if context in self.contexts.values():
+                            log.info("Такое соединение уже установлено %s", context)
                             continue
-                if context.key is None and context.flags & 0x1:
-                    pass  # TODO
-                log.debug("Приём пакета: ip: %s; id: %d; seq_num: %d; filename: %s",
-                          ip, id, seq_num, context.filename)
-                with open("{}:{}:{}:{}"
-                          .format(context.start_time, task.ip, task.id, context.filename), "ab") as file:
-                    context.cur_size += len(data)
+                        self.contexts[ip + str(id)] = context
+                    send_echo_request(self.sock, ip, id, 0, b'magic-ping-rini'
+                                      + struct.pack("!B", err) + bytes_filename)
+                    context.file = open("{}:{}:{}:{}".format(self.start_time, self.ip, self.id, self.filename), "wb")
+                    log.info("Начат приём файла: ip: %s; id: %d; filename: %s",
+                             ip, id, context.filename)
+
+                elif len(data) > 15 and data[:15] == b'magic-ping-send':
+                    with self.contexts_lock:
+                        context = self.contexts.get(ip + str(id))
+                        if context is None or context.seq_num < seq_num:
+                            log.debug("Пакет неопознан: ip: %s; id: %d; seq_num: %d",
+                                      ip, id, seq_num)
+                            continue
+                        elif context.seq_num > seq_num:
+                            send_echo_request(self.sock, ip, id, seq_num,
+                                              b'magic-ping-recv' + data[-1:])
+                            continue
+                        else:
+                            if not context.lock.acquire(False):
+                                continue
+                    if context.key is None and context.flags & 0x1:
+                        pass  # TODO
+                    log.debug("Приём пакета: ip: %s; id: %d; seq_num: %d; filename: %s",
+                              ip, id, seq_num, context.filename)
+                    context.cur_size += len(data) - 15
                     if context.cur_size > context.size:
                         log.error("Превышен размер файла")
                         with self.contexts_lock:
                             del self.contexts[ip + str(id)]
                         with self.connects_lock:
                             self.connects[ip] -= 1
-                    send_echo_request(self.sock, ip, id, seq_num, b'magic-ping-recv'+data[-2:-1])
-                    file.write(data)
+                    send_echo_request(self.sock, ip, id, seq_num,
+                                      b'magic-ping-recv' + data[-1:])
+                    context.file.write(data[15:])
                     if context.cur_size == context.size:
                         log.info("Завершён приём файла: ip: %s; id: %d; filename: %s",
                                  task.ip, task.id, context.filename)
+                        context.file.close()
                         with self.contexts_lock:
                             self.connects[ip] -= 1
                             del self.contexts[ip + str(id)]
                     context.seq_num = (context.seq_num + 1) % 65536
-                log.debug("Приём пакета завершён: ip: %s; id: %d; seq_num: %d; filename: %s",
-                          ip, id, seq_num, context.filename)
-                context.lock.release()
+                    context.lock.release()
+                    log.debug("Приём пакета завершён: ip: %s; id: %d; seq_num: %d; filename: %s",
+                              ip, id, seq_num, context.filename)
+            except Exception as _:
+                log.exception("Unknown behaviour")
+                pass
+
         log.debug("Завершён обработчик запросов")
+

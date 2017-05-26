@@ -29,7 +29,7 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log_file", "-l", dest="log_file", type=open, default=sys.stderr)
 
     log_level = parser.add_mutually_exclusive_group()
-    log_level.set_defaults(log_level=logging.ERROR)
+    log_level.set_defaults(log_level=logging.INFO)
     log_level.add_argument("--error", "-e", dest="log_level",
                            action="store_const", const=logging.ERROR)
     log_level.add_argument("--info", "-i", dest="log_level",
@@ -51,6 +51,7 @@ def get_parser() -> argparse.ArgumentParser:
     client_parser.set_defaults(type=TypeOfApp.CLIENT)
     client_parser.add_argument("--max_size", "-m", type=int, default=1024 ** 3 * 15)
     client_parser.add_argument("--timeout", "-t", type=float, default=10.)
+    client_parser.add_argument("--unlimited", "-u", action="store_const", const=None, dest="timeout")
     client_parser.add_argument("--filename", "-f", default=None)
     client_parser.add_argument("--destination", "-d", default=None)
     # client_parser.set_defaults(log_level=logging.ERROR)

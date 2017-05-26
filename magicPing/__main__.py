@@ -54,9 +54,9 @@ def get_parser() -> argparse.ArgumentParser:
     daemon_group.add_argument("--start_daemon", "-d", action="store_const",
                               const=True, default=False, help="Запустить в качестве демона")
     daemon_group.add_argument("--stop_daemon", "-s", action="store_const",
-                              const=True, default=False, help="Завершить демон")
+                              const=True, default=False, help="Завершить демона")
     daemon_group.add_argument("--restart_daemon", "-r", action="store_const",
-                              const=True, default=False, help="Перезапустить демон")
+                              const=True, default=False, help="Перезапустить демона")
     server_parser.add_argument("--target_path", "-p",
                                type=lambda x: pathlib.Path(os.path.realpath(x)),
                                default=pathlib.Path(os.getcwd()),

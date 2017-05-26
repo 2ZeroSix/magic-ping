@@ -19,7 +19,7 @@ def monitor():
                        socket.SOCK_RAW,
                        socket.IPPROTO_ICMP) as sock:
         while True:
-            msg = sock.recv(65535)  # 65535 is a max value of total length
+            msg = sock.recv(65535)
             ip_header = msg[:20]
             icmp_header = msg[20:24]
             echo_header = msg[24:28]
@@ -94,9 +94,6 @@ def send_echo_request(sock, ip, icmp_id, sequence_num, data):
     # noinspection SpellCheckingInspection
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               0, icmp_id, sequence_num)
-    icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
-                              utils.checksum(icmp_header + data),
-                              icmp_id, sequence_num)
     msg = icmp_header + data
     sock.sendto(msg, (ip, 0))
 
@@ -120,9 +117,6 @@ def send_echo_reply(sock, ip, icmp_id, sequence_num, data):
     # noinspection SpellCheckingInspection
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               0, icmp_id, sequence_num)
-    icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
-                              utils.checksum(icmp_header + data),
-                              icmp_id, sequence_num)
     msg = icmp_header + data
     sock.sendto(msg, (ip, 0))
 
@@ -158,7 +152,7 @@ def receive_echo_request(sock, source_address=None, pref_id=None,
                 sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
-            icmp_type, icmp_code, checksum, icmp_id, seq_num\
+            icmp_type, icmp_code, _, icmp_id, seq_num\
                 = struct.unpack("!BBHHH", msg[20:28].tobytes())
             if icmp_type == 8 or icmp_code == 0:
                 data = msg[28:]
@@ -209,11 +203,12 @@ def receive_echo_reply(sock, source_address=None, pref_id=None,
                 sock.settimeout(sock_timeout)
             msg = memoryview(sock.recv(65535))
             ip = socket.inet_ntoa(msg[12:16])
-            icmp_type, icmp_code, icmp_id, seq_num\
-                = struct.unpack("!BBHH", msg[20:28].tobytes())
-            if icmp_type == 0 and icmp_code == 0:
+            icmp_type, icmp_code, _, icmp_id, seq_num\
+                = struct.unpack("!BBHHH", msg[20:28].tobytes())
+            if icmp_type == 0 or icmp_code == 0:
                 data = msg[28:]
-                if ((source_address is None or ip == source_address)
+                if ((source_address is None
+                     or socket.inet_aton(ip) == socket.inet_aton(socket.gethostbyname(source_address)))
                     and (pref_id is None or icmp_id == pref_id)
                     and (pref_seq_num is None or seq_num == pref_seq_num)
                     and (prefix is None or (len(data) >= len(prefix)
@@ -225,5 +220,4 @@ def receive_echo_reply(sock, source_address=None, pref_id=None,
             pass
         if timeout is not None:
             sock_timeout = start - time.time() + timeout
-
     raise socket.timeout

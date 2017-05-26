@@ -71,9 +71,9 @@ class Client:
                                            struct.pack("!Q", file_size) +
                                            bytes_filename)
                     _, icmp_id, _, data =\
-                        icmp.receive_echo_request(self.sock, ip, None, 0,
-                                                  sock_timeout / 2 if sock_timeout is not None else 1,
-                                                  b'magic-ping-rini', bytes_filename)
+                        icmp.receive_echo_reply(self.sock, ip, None, 0,
+                                                sock_timeout / 2 if sock_timeout is not None else 1,
+                                                b'magic-ping-rini', bytes_filename)
                     return icmp_id, data[15]
                 except socket.timeout:
                     pass
@@ -104,9 +104,9 @@ class Client:
                                        b'magic-ping-skey' +
                                        generator.public_key.to_bytes(int(math.log2(generator.public_key)) + 1,
                                                                      byteorder="big"))
-                _, _, _, data = icmp.receive_echo_request(self.sock, ip, icmp_id, 0,
-                                                          sock_timeout / 2 if sock_timeout is not None else 1,
-                                                          b'magic-ping-rkey')
+                _, _, _, data = icmp.receive_echo_reply(self.sock, ip, icmp_id, 0,
+                                                        sock_timeout / 2 if sock_timeout is not None else 1,
+                                                        b'magic-ping-rkey')
                 generator.generate_shared_secret(int.from_bytes(data[15:], "big"))
                 return bytearray.fromhex(generator.shared_key)
             except socket.timeout:
@@ -140,9 +140,9 @@ class Client:
                 try:
                     icmp.send_echo_request(self.sock, ip, icmp_id, sequence_num, b'magic-ping-send' + data)
                     _, _, _, data = \
-                        icmp.receive_echo_request(self.sock, ip, icmp_id, sequence_num,
-                                                  sock_timeout / 2 if sock_timeout is not None else 1,
-                                                  b'magic-ping-recv' + data[-1:])
+                        icmp.receive_echo_reply(self.sock, ip, icmp_id, sequence_num,
+                                                sock_timeout / 2 if sock_timeout is not None else 1,
+                                                b'magic-ping-recv' + data[-1:])
                     return
                 except socket.timeout:
                     pass

@@ -151,18 +151,12 @@ class Server:
         log.info("Сервер начал прослушивание запросов")
         while self.runnable.is_set():
             try:
-                msg = memoryview(self.sock.recv(65535))
-                ip = socket.inet_ntoa(msg[12:16])
-                icmp_type, icmp_code, _, icmp_id, sequence_num \
-                    = struct.unpack("!BBHHH", msg[20:28].tobytes())
-                if icmp_type == 8 and icmp_code == 0:
-                    log.debug("Получен запрос: ip: %s; id: %d; seq_num: %d",
-                              ip, icmp_id, sequence_num)
-                    data = msg[28:]
-                    if len(data) > 15 and data[:12] == b'magic-ping-s':
-                        with self.tasks_lock:
-                            self.tasks.add(Server.Packet(ip, icmp_id, sequence_num, data))
-                        self.tasks_count.release()
+                ip, icmp_id, sequence_num, data = \
+                    magicPing.icmp.receive_echo_request(self.sock, timeout=1, prefix=b'magic-ping-s')
+                if len(data) > 15 and data[:12] == b'magic-ping-s':
+                    with self.tasks_lock:
+                        self.tasks.add(Server.Packet(ip, icmp_id, sequence_num, data))
+                    self.tasks_count.release()
             except socket.timeout:
                 pass
         log.info("Сервер закончил прослушивание запросов")
@@ -199,8 +193,8 @@ class Server:
                             log.info("Такое соединение уже установлено %s", context)
                             continue
                         self.contexts[ip + str(id)] = context
-                    magicPing.icmp.send_echo_request(self.sock, ip, id, 0, b'magic-ping-rini'
-                                                     + struct.pack("!B", err) + bytes_filename)
+                    magicPing.icmp.send_echo_reply(self.sock, ip, id, 0, b'magic-ping-rini'
+                                                   + struct.pack("!B", err) + bytes_filename)
                     if err:
                         continue
                     print(self.target_path)
@@ -227,9 +221,9 @@ class Server:
                         generator.generate_public_key()
                         context.public_key = generator.public_key
                     magicPing.icmp \
-                        .send_echo_request(self.sock, ip, id, 0, b'magic-ping-rkey' +
-                                           generator.public_key.to_bytes(int(math.log2(context.public_key)) + 1,
-                                                                         byteorder="big"))
+                        .send_echo_reqply(self.sock, ip, id, 0, b'magic-ping-rkey' +
+                                          generator.public_key.to_bytes(int(math.log2(context.public_key)) + 1,
+                                                                        byteorder="big"))
                     if context.private_key is None:
                         generator.generate_shared_secret(int.from_bytes(data[15:], "big"))
                         context.private_key = bytearray.fromhex(generator.shared_key)
@@ -244,8 +238,8 @@ class Server:
                                       ip, id, seq_num)
                             continue
                         elif context.seq_num == (seq_num + 1) % 65536:
-                            magicPing.icmp.send_echo_request(self.sock, ip, id, seq_num,
-                                                             b'magic-ping-recv' + data[-1:])
+                            magicPing.icmp.send_echo_reply(self.sock, ip, id, seq_num,
+                                                           b'magic-ping-recv' + data[-1:])
                             continue
                         else:
                             if not context.lock.acquire(False):
@@ -259,8 +253,8 @@ class Server:
                             del self.contexts[ip + str(id)]
                         with self.connects_lock:
                             self.connects[ip] -= 1
-                    magicPing.icmp.send_echo_request(self.sock, ip, id, seq_num,
-                                                     b'magic-ping-recv' + data[-1:])
+                    magicPing.icmp.send_echo_reply(self.sock, ip, id, seq_num,
+                                                   b'magic-ping-recv' + data[-1:])
                     if context.private_key is None:
                         context.file.write(data[15:])
                     else:
@@ -429,7 +423,7 @@ class DaemonServer:
         self.stop()
         self.start()
 
-    def signal_terminating(self, a, b):
+    def signal_terminating(self, _, __):
         self.server.stop()
         signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
@@ -440,3 +434,4 @@ class DaemonServer:
         self.server = Server(self.max_size, self.thread_num, self.target_path)
         signal.signal(signal.SIGTERM, self.signal_terminating)
         self.server.run()
+        exit(0)

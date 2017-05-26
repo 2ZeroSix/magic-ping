@@ -68,7 +68,7 @@ def get_parser() -> argparse.ArgumentParser:
                                help="Максимальный размер файла в байтах")
     timeout_group = client_parser.add_mutually_exclusive_group()
     timeout_group.add_argument("--timeout", "-t", type=float, default=10.,
-                               help="Максимальное время ожидания")
+                               help="Максимальное время ожидания в секундах")
     timeout_group.add_argument("--unlimited", "-u", action="store_const",
                                const=None, dest="timeout", help="Не ограничивать время ожидания")
     client_parser.add_argument("--filename", "-f", default=None, help="Путь до файла для отправки")

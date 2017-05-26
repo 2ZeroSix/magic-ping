@@ -136,7 +136,7 @@ def receive_echo_request(sock, source_address=None, pref_id=None,
     :param source_address: ожидаемый адрес отправителя
     :param pref_id: ожидаемый идетификатор отправителя
     :param pref_seq_num: ожидаемый номер сообщения
-    :param timeout: время ожидания сообщения
+    :param timeout: время ожидания сообщения в секундах
     :param prefix: ожидаемое начало сообщения
     :param suffix: ожидаемый конец сообщения
     :return: кортеж информации о полученном сообщении
@@ -187,7 +187,7 @@ def receive_echo_reply(sock, source_address=None, pref_id=None,
     :param source_address: ожидаемый адрес отправителя
     :param pref_id: ожидаемый идетификатор отправителя
     :param pref_seq_num: ожидаемый номер сообщения
-    :param timeout: время ожидания сообщения
+    :param timeout: время ожидания сообщения в секундах
     :param prefix: ожидаемое начало сообщения
     :param suffix: ожидаемый конец сообщения
     :return: кортеж информации о полученном сообщении

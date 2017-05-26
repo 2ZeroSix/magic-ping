@@ -30,7 +30,7 @@ class Client:
         :type timeout: float
         :type enable_cypher: bool
         :param max_size: максимальный размер файла
-        :param timeout: максимальное время ожидаиния ответа
+        :param timeout: максимальное время ожидаиния ответа в секундах
         :param enable_cypher: Использование шифрования
         """
         log.debug("Инициализация клиента")

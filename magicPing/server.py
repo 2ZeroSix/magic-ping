@@ -12,7 +12,7 @@ import atexit
 import signal
 
 import math
-import diffiehellman.diffiehellman
+from diffiehellman import diffiehellman
 
 import magicPing.icmp
 
@@ -217,11 +217,11 @@ class Server:
                         elif not context.lock.acquire(False):
                             continue
                     if context.private_key is None:
-                        generator = diffiehellman.diffiehellman.DiffieHellman(key_length=1024)
+                        generator = diffiehellman.DiffieHellman(key_length=1024)
                         generator.generate_public_key()
                         context.public_key = generator.public_key
                     magicPing.icmp \
-                        .send_echo_reqply(self.sock, ip, id, 0, b'magic-ping-rkey' +
+                        .send_echo_reply(self.sock, ip, id, 0, b'magic-ping-rkey' +
                                           generator.public_key.to_bytes(int(math.log2(context.public_key)) + 1,
                                                                         byteorder="big"))
                     if context.private_key is None:

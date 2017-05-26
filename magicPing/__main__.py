@@ -8,7 +8,7 @@ from enum import Enum
 
 from magicPing import client
 from magicPing import server
-from magicPing.icmp import monitor
+from magicPing import icmp
 
 
 class TypeOfApp(Enum):
@@ -113,7 +113,7 @@ if __name__ == "__main__":
                     args.destination if args.destination is not None else input("Адресат: "))
 
     elif args.type == TypeOfApp.MONITOR:
-        monitor()
+        icmp.monitor()
 
     else:
         parser.print_help()

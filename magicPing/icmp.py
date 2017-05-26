@@ -6,7 +6,6 @@ import socket
 import struct
 import time
 
-from magicPing import utils
 
 log = logging.getLogger(__name__)
 

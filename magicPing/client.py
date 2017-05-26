@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 class Client:
     """
-    Клиент, отправляющий файлы с помощью ICMP ECHO REQUEST
+    Клиент, отправляющий файлы с помощью ICMP ECHO REQUEST/REPLY
     """
     def __init__(self, max_size=1024**3 * 10, timeout=10., enable_cypher=False):
         """

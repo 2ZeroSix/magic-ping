@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 class Server:
     """
-    Сервер получающий файлы с помощью ICMP ECHO REQUEST
+    Сервер, получающий файлы с помощью ICMP ECHO REQUEST/REPLY
     файлы сохраняются в рабочую директорию в формате
     время приёма : ip : icmp_id : имя файла
     """

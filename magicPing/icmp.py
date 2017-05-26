@@ -120,9 +120,9 @@ def send_echo_reply(sock, ip, icmp_id, sequence_num, data):
     # noinspection SpellCheckingInspection
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               0, icmp_id, sequence_num)
-    # icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
-    #                           utils.checksum(icmp_header + data),
-    #                           icmp_id, sequence_num)
+    icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
+                              utils.checksum(icmp_header + data),
+                              icmp_id, sequence_num)
     msg = icmp_header + data
     sock.sendto(msg, (ip, 0))
 

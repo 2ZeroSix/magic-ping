@@ -26,6 +26,9 @@ class Client:
     def __init__(self, max_size=1024**3 * 10, timeout=10., enable_cypher=False):
         """
         Инициализация клиента
+        :type max_size: int
+        :type timeout: float
+        :type enable_cypher: bool
         :param max_size: максимальный размер файла
         :param timeout: максимальное время ожидаиния ответа
         :param enable_cypher: Использование шифрования
@@ -46,6 +49,9 @@ class Client:
     def send_magic_init(self, ip, filename, file_size):
         """
         посылка инициализирующего сообщения
+        :type ip: str
+        :type filename: str
+        :type file_size: int
         :param ip: ip адресата
         :param filename: имя файла
         :param file_size: размер файла
@@ -61,13 +67,13 @@ class Client:
                 try:
                     flags = 1 if self.enable_cypher else 0
                     icmp.send_echo_request(self.sock, ip, 0, 0,
-                                      b'magic-ping-sini' + struct.pack("!B", flags) +
-                                      struct.pack("!Q", file_size) +
-                                      bytes_filename)
+                                           b'magic-ping-sini' + struct.pack("!B", flags) +
+                                           struct.pack("!Q", file_size) +
+                                           bytes_filename)
                     _, icmp_id, _, data =\
                         icmp.receive_echo_request(self.sock, ip, None, 0,
-                                             sock_timeout / 2 if sock_timeout is not None else 1,
-                                             b'magic-ping-rini', bytes_filename)
+                                                  sock_timeout / 2 if sock_timeout is not None else 1,
+                                                  b'magic-ping-rini', bytes_filename)
                     return icmp_id, data[15]
                 except socket.timeout:
                     pass
@@ -80,6 +86,8 @@ class Client:
     def create_cypher_key(self, ip, icmp_id):
         """
         создание ключа шифрования
+        :type ip: str
+        :type icmp_id: int
         :param ip: адресат 
         :param icmp_id: id сеанса передачи файла
         :return: общий ключ шифрования
@@ -93,12 +101,12 @@ class Client:
         while self.timeout is None or sock_timeout > 0:
             try:
                 icmp.send_echo_request(self.sock, ip, icmp_id, 0,
-                                  b'magic-ping-skey' +
-                                  generator.public_key.to_bytes(int(math.log2(generator.public_key)) + 1,
-                                                                byteorder="big"))
+                                       b'magic-ping-skey' +
+                                       generator.public_key.to_bytes(int(math.log2(generator.public_key)) + 1,
+                                                                     byteorder="big"))
                 _, _, _, data = icmp.receive_echo_request(self.sock, ip, icmp_id, 0,
-                                                     sock_timeout / 2 if sock_timeout is not None else 1,
-                                                     b'magic-ping-rkey')
+                                                          sock_timeout / 2 if sock_timeout is not None else 1,
+                                                          b'magic-ping-rkey')
                 generator.generate_shared_secret(int.from_bytes(data[15:], "big"))
                 return bytearray.fromhex(generator.shared_key)
             except socket.timeout:
@@ -111,6 +119,10 @@ class Client:
     def send_magic_data(self, ip, icmp_id, sequence_num, data):
         """
         Посылка куска сообщения
+        :type ip: str
+        :type icmp_id: int
+        :type sequence_num: int
+        :type data: bytes или memoryview
         :param ip: адресат
         :param icmp_id: id сеанса передачи файла
         :param sequence_num: номер куска сообщения
@@ -129,8 +141,8 @@ class Client:
                     icmp.send_echo_request(self.sock, ip, icmp_id, sequence_num, b'magic-ping-send' + data)
                     _, _, _, data = \
                         icmp.receive_echo_request(self.sock, ip, icmp_id, sequence_num,
-                                             sock_timeout / 2 if sock_timeout is not None else 1,
-                                             b'magic-ping-recv' + data[-1:])
+                                                  sock_timeout / 2 if sock_timeout is not None else 1,
+                                                  b'magic-ping-recv' + data[-1:])
                     return
                 except socket.timeout:
                     pass
@@ -140,9 +152,12 @@ class Client:
         finally:
             log.debug("Посылка куска данных завершена")
 
-    def send(self, filename: str, dest: str, enable_cypher=None):
+    def send(self, filename, dest, enable_cypher=None):
         """
         Посылка файла
+        :type filename: str
+        :type dest: str
+        :type enable_cypher: bool
         :param filename: имя файла
         :param dest: адресат
         :param enable_cypher: использование шифрования (None == self.enable_cypher)

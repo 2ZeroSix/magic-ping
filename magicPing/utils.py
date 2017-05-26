@@ -1,4 +1,4 @@
-from shutil import get_terminal_size
+import shutil
 
 
 def carry_around_add(a, b):
@@ -50,7 +50,7 @@ def print_progress_bar(iteration: int, total: int, prefix: str = '', suffix: str
     """
     percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
     if length is None:
-        length = max(get_terminal_size()[0] - len(prefix) - len(suffix) - len(percent) - 5, 10)
+        length = max(shutil.get_terminal_size()[0] - len(prefix) - len(suffix) - len(percent) - 5, 10)
     filled_length = int(length * iteration // total)
     bar = fill * filled_length + '-' * (length - filled_length)
     print('\r%s|%s| %s%% %s' % (prefix, bar, percent, suffix), end='\r')

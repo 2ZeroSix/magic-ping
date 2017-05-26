@@ -6,6 +6,8 @@ import socket
 import struct
 import time
 
+from magicPing import utils
+
 log = logging.getLogger(__name__)
 
 
@@ -76,6 +78,11 @@ def monitor():
 def send_echo_request(sock, ip, icmp_id, sequence_num, data):
     """
     Посылка ICMP ECHO REQUEST
+    :type sock: socket.socket
+    :type ip: str
+    :type icmp_id: int
+    :type sequence_num: int
+    :type data: bytes или memoryview
     :param sock: сокет для отправки сообщения
     :param ip: адресат
     :param icmp_id: идентификатор
@@ -87,6 +94,9 @@ def send_echo_request(sock, ip, icmp_id, sequence_num, data):
     # noinspection SpellCheckingInspection
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               0, icmp_id, sequence_num)
+    icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
+                              utils.checksum(icmp_header + data),
+                              icmp_id, sequence_num)
     msg = icmp_header + data
     sock.sendto(msg, (ip, 0))
 
@@ -94,6 +104,11 @@ def send_echo_request(sock, ip, icmp_id, sequence_num, data):
 def send_echo_reply(sock, ip, icmp_id, sequence_num, data):
     """
     Посылка ICMP ECHO REPLY
+    :type sock: socket.socket
+    :type ip: str
+    :type icmp_id: int
+    :type sequence_num: int
+    :type data: bytes или memoryview
     :param sock: сокет для отправки сообщения
     :param ip: адресат
     :param icmp_id: идентификатор
@@ -105,6 +120,9 @@ def send_echo_reply(sock, ip, icmp_id, sequence_num, data):
     # noinspection SpellCheckingInspection
     icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
                               0, icmp_id, sequence_num)
+    # icmp_header = struct.pack('!BBHHH', icmp_type, icmp_code,
+    #                           utils.checksum(icmp_header + data),
+    #                           icmp_id, sequence_num)
     msg = icmp_header + data
     sock.sendto(msg, (ip, 0))
 
@@ -114,6 +132,13 @@ def receive_echo_request(sock, source_address=None, pref_id=None,
                          prefix=None, suffix=None):
     """
     Получение ICMP ECHO REQUEST
+    :type sock: socket.socket
+    :type source_address: str или None
+    :type pref_id: int или None
+    :type pref_seq_num: int или None
+    :type timeout: float или None
+    :type prefix: bytes или memoryview
+    :type suffix: bytes или memoryview
     :param sock: сокет для приёма сообщения
     :param source_address: ожидаемый адрес отправителя
     :param pref_id: ожидаемый идетификатор отправителя
@@ -158,6 +183,13 @@ def receive_echo_reply(sock, source_address=None, pref_id=None,
                        prefix=None, suffix=None):
     """
     Получение ICMP ECHO REPLY
+    :type sock: socket.socket
+    :type source_address: str
+    :type pref_id: int
+    :type pref_seq_num: int
+    :type timeout: float
+    :type prefix: bytes или memoryview
+    :type suffix: bytes или memoryview
     :param sock: сокет для приёма сообщения
     :param source_address: ожидаемый адрес отправителя
     :param pref_id: ожидаемый идетификатор отправителя
